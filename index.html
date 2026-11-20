@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FaturaSmart — Controle e Separação de Faturas</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Google Fonts - Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              900: '#064e3b',
+            },
+            accent: {
+              500: '#8b5cf6',
+              600: '#7c3aed',
+              700: '#6d28d9',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbar for clean visual appearance */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col selection:bg-emerald-100 selection:text-emerald-900">
+
+  <!-- Toast Notification Bar -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Modal Adicionar Pessoa -->
+  <div id="person-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl border border-slate-100 p-6 w-full max-w-sm transform transition-all">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-bold text-slate-900 text-lg flex items-center gap-2">
+          <i class="fa-solid fa-user-plus text-emerald-600"></i> Adicionar Terceiro
+        </h3>
+        <button onclick="closePersonModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <p class="text-xs text-slate-500 mb-4">Cadastre a pessoa para quem você costuma emprestar o cartão ou dividir gastos.</p>
+      <input type="text" id="modal-person-name" placeholder="Ex: Mãe, Amigo Lucas, Irmão..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm mb-4">
+      <div class="flex justify-end gap-2">
+        <button onclick="closePersonModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancelar</button>
+        <button onclick="saveNewPerson()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20">Salvar Pessoa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header Header Nav -->
+  <header class="bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+            <i class="fa-solid fa-receipt text-lg"></i>
+          </div>
+          <div>
+            <h1 class="font-extrabold text-slate-900 text-lg leading-tight tracking-tight">Fatura<span class="text-emerald-600">Smart</span></h1>
+            <p class="text-[10px] text-slate-400 font-medium">Gestão & Separação de Fatura do Estagiário</p>
+          </div>
+        </div>
+
+        <!-- System Controls & Sample Data -->
+        <div class="flex items-center gap-2">
+          <button onclick="loadSampleData()" title="Carregar Dados de Exemplo" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition">
+            <i class="fa-solid fa-wand-magic-sparkles text-emerald-600"></i>
+            <span>Exemplos</span>
+          </button>
+
+          <button onclick="exportCSV()" title="Exportar para CSV" class="p-2 text-slate-500 hover:text-emerald-600 hover:bg-slate-100 rounded-lg transition" title="Exportar CSV">
+            <i class="fa-solid fa-file-csv text-base"></i>
+          </button>
+          
+          <button onclick="exportJSON()" title="Exportar Backup JSON" class="p-2 text-slate-500 hover:text-emerald-600 hover:bg-slate-100 rounded-lg transition">
+            <i class="fa-solid fa-download text-base"></i>
+          </button>
+
+          <button onclick="confirmReset()" title="Resetar Tudo" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition">
+            <i class="fa-solid fa-trash-can text-base"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="bg-slate-50 border-t border-slate-200/60 px-4 sm:px-6 lg:px-8">
+      <div class="max-w-7xl mx-auto flex space-x-1 sm:space-x-4 overflow-x-auto py-2 no-scrollbar">
+        <button id="tab-btn-lancamentos" onclick="switchTab('lancamentos')" class="tab-btn flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap bg-white text-emerald-700 shadow-sm border border-slate-200/80">
+          <i class="fa-solid fa-list-check"></i> Lançamentos
+        </button>
+        <button id="tab-btn-pessoas" onclick="switchTab('pessoas')" class="tab-btn flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap text-slate-600 hover:bg-white/60">
+          <i class="fa-solid fa-users"></i> Por Pessoa
+          <span id="badge-terceiros" class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full ml-1 hidden">0</span>
+        </button>
+        <button id="tab-btn-segmentos" onclick="switchTab('segmentos')" class="tab-btn flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap text-slate-600 hover:bg-white/60">
+          <i class="fa-solid fa-chart-pie"></i> Por Segmento
+        </button>
+        <button id="tab-btn-resumo" onclick="switchTab('resumo')" class="tab-btn flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap text-slate-600 hover:bg-white/60">
+          <i class="fa-solid fa-piggy-bank"></i> Resumo & Saúde Financeira
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- Top KPI Bar (Always Visible) -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
+      <!-- Total Fatura -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-500 mb-1">
+          <span class="text-xs font-medium">Total da Fatura</span>
+          <span class="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 text-xs"><i class="fa-solid fa-credit-card"></i></span>
+        </div>
+        <div>
+          <div id="kpi-total-fatura" class="text-xl sm:text-2xl font-extrabold text-slate-900">R$ 0,00</div>
+          <p class="text-[11px] text-slate-400 mt-0.5">Soma total dos lançamentos</p>
+        </div>
+      </div>
+
+      <!-- Minha Parte -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-500 mb-1">
+          <span class="text-xs font-medium">Minha Parte Real</span>
+          <span class="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 text-xs"><i class="fa-solid fa-user"></i></span>
+        </div>
+        <div>
+          <div id="kpi-minha-parte" class="text-xl sm:text-2xl font-extrabold text-emerald-600">R$ 0,00</div>
+          <p id="kpi-minha-pct" class="text-[11px] text-slate-400 mt-0.5">0% da fatura total</p>
+        </div>
+      </div>
+
+      <!-- Total Terceiros -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-500 mb-1">
+          <span class="text-xs font-medium">Total Terceiros</span>
+          <span class="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs"><i class="fa-solid fa-people-arrows"></i></span>
+        </div>
+        <div>
+          <div id="kpi-total-terceiros" class="text-xl sm:text-2xl font-extrabold text-indigo-600">R$ 0,00</div>
+          <p id="kpi-terceiros-pct" class="text-[11px] text-slate-400 mt-0.5">Cartão emprestado</p>
+        </div>
+      </div>
+
+      <!-- Pendente de Recebimento (Pix) -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-500 mb-1">
+          <span class="text-xs font-medium">Pendente Terceiros</span>
+          <span id="kpi-pendente-badge" class="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 text-xs"><i class="fa-solid fa-clock font-bold"></i></span>
+        </div>
+        <div>
+          <div id="kpi-falta-receber" class="text-xl sm:text-2xl font-extrabold text-amber-600">R$ 0,00</div>
+          <p id="kpi-reembolsado-sub" class="text-[11px] text-slate-400 mt-0.5">Aguardando PIX</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 1: LANÇAMENTOS -->
+    <div id="tab-content-lancamentos" class="space-y-6">
+      
+      <!-- Quick Entry Form Card -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-plus-circle text-emerald-600"></i> Novo Lançamento na Fatura
+          </h2>
+          <button onclick="loadSampleData()" class="sm:hidden text-xs text-emerald-700 font-semibold underline">Carregar Exemplos</button>
+        </div>
+
+        <form id="expense-form" onsubmit="handleFormSubmit(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+          <input type="hidden" id="edit-id">
+
+          <!-- Estabelecimento -->
+          <div class="lg:col-span-4">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Estabelecimento / Descrição</label>
+            <input type="text" id="form-title" required placeholder="Ex: Supermercado, Uber, Farmácia..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+          </div>
+
+          <!-- Valor R$ -->
+          <div class="lg:col-span-2">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Valor (R$)</label>
+            <input type="number" step="0.01" min="0.01" id="form-amount" required placeholder="0,00" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-semibold">
+          </div>
+
+          <!-- Parcela / Data -->
+          <div class="lg:col-span-2">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Parcela / Tipo</label>
+            <input type="text" id="form-installment" placeholder="Ex: À vista, 1/3, 2/5" value="À vista" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+          </div>
+
+          <!-- Segmento / Categoria -->
+          <div class="lg:col-span-2">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Segmento</label>
+            <select id="form-category" class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-white">
+              <option value="Alimentação">🛒 Alimentação</option>
+              <option value="Saúde">❤️ Saúde</option>
+              <option value="Transporte">🚗 Transporte</option>
+              <option value="Lazer">🎮 Lazer</option>
+              <option value="Educação">🎓 Educação</option>
+              <option value="Vestuário">👕 Vestuário</option>
+              <option value="Assinaturas">📺 Assinaturas</option>
+              <option value="Casa/Outros">🏠 Casa / Outros</option>
+            </select>
+          </div>
+
+          <!-- Responsável -->
+          <div class="lg:col-span-2">
+            <div class="flex justify-between items-center mb-1">
+              <label class="block text-xs font-semibold text-slate-600">Responsável</label>
+              <button type="button" onclick="openPersonModal()" class="text-[11px] font-bold text-emerald-700 hover:underline">+ Terceiro</button>
+            </div>
+            <select id="form-person" class="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-white font-medium">
+              <!-- Dynamically Populated -->
+            </select>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="lg:col-span-12 flex justify-end gap-2 mt-1">
+            <button type="button" id="cancel-edit-btn" onclick="cancelEdit()" class="hidden px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50">Cancelar Edição</button>
+            <button type="submit" id="submit-btn" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-plus"></i> <span>Adicionar à Fatura</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Filters & Expense List -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Itens Lançados</h3>
+            <p class="text-xs text-slate-500">Gerencie e acompanhe tudo que está na fatura do mês que vem</p>
+          </div>
+
+          <!-- Filter Controls -->
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Search -->
+            <div class="relative flex-1 sm:w-48">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
+              <input type="text" id="filter-search" oninput="renderExpenses()" placeholder="Buscar lançamento..." class="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+
+            <!-- Filter Person -->
+            <select id="filter-person" onchange="renderExpenses()" class="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <option value="TODOS">👥 Todos Responsáveis</option>
+              <!-- Populated dynamically -->
+            </select>
+
+            <!-- Filter Category -->
+            <select id="filter-category" onchange="renderExpenses()" class="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <option value="TODOS">🏷️ Todos Segmentos</option>
+              <option value="Alimentação">🛒 Alimentação</option>
+              <option value="Saúde">❤️ Saúde</option>
+              <option value="Transporte">🚗 Transporte</option>
+              <option value="Lazer">🎮 Lazer</option>
+              <option value="Educação">🎓 Educação</option>
+              <option value="Vestuário">👕 Vestuário</option>
+              <option value="Assinaturas">📺 Assinaturas</option>
+              <option value="Casa/Outros">🏠 Casa / Outros</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Table / List View -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600 border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-y border-slate-200/70 font-semibold text-slate-500 uppercase tracking-wider">
+                <th class="py-3 px-3">Estabelecimento</th>
+                <th class="py-3 px-3">Segmento</th>
+                <th class="py-3 px-3">Responsável</th>
+                <th class="py-3 px-3">Parcela</th>
+                <th class="py-3 px-3 text-right">Valor</th>
+                <th class="py-3 px-3 text-center">Status PIX</th>
+                <th class="py-3 px-3 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="expense-table-body" class="divide-y divide-slate-100">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+          
+          <div id="empty-state" class="hidden py-12 text-center">
+            <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2 text-lg">
+              <i class="fa-solid fa-folder-open"></i>
+            </div>
+            <p class="text-sm font-semibold text-slate-700">Nenhum lançamento encontrado</p>
+            <p class="text-xs text-slate-400">Adicione novos itens no formulário acima ou limpe os filtros.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: POR PESSOA -->
+    <div id="tab-content-pessoas" class="hidden space-y-6">
+      <div class="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 flex items-start gap-3">
+        <i class="fa-solid fa-shield-halved text-amber-600 text-lg mt-0.5"></i>
+        <div>
+          <h3 class="text-xs font-bold text-amber-900 uppercase tracking-wider">Visão Financeira — Regra da Nathalia Arcuri</h3>
+          <p class="text-xs text-amber-800 mt-0.5">
+            "Emprestar o cartão é emprestar o seu nome e seu limite. Só feche a sua fatura quando o Pix das outras pessoas tiver caindo na sua conta!". Use o botão de <strong>WhatsApp</strong> abaixo para enviar o detalhamento exato do reembolso.
+          </p>
+        </div>
+      </div>
+
+      <!-- Person Cards Grid -->
+      <div id="person-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+
+    <!-- TAB 3: POR SEGMENTO -->
+    <div id="tab-content-segmentos" class="hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Análise de Gastos por Segmento</h3>
+            <p class="text-xs text-slate-500">Descubra em quais categorias o dinheiro está sendo concentrado</p>
+          </div>
+
+          <!-- Toggle View Filter: Eu vs Fatura Inteira -->
+          <div class="bg-slate-100 p-1 rounded-xl flex items-center gap-1 self-start sm:self-auto">
+            <button id="segment-btn-eu" onclick="toggleSegmentView('EU')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition bg-white text-emerald-700 shadow-sm">
+              <i class="fa-solid fa-user mr-1"></i> Apenas Meus Gastos
+            </button>
+            <button id="segment-btn-todos" onclick="toggleSegmentView('TODOS')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900">
+              <i class="fa-solid fa-users mr-1"></i> Fatura Completa
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <!-- Chart Canvas -->
+          <div class="lg:col-span-5 flex justify-center">
+            <div class="relative w-64 h-64">
+              <canvas id="categoryChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Progress Bars List -->
+          <div id="segment-bars-list" class="lg:col-span-7 space-y-3.5">
+            <!-- Rendered via JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: RESUMO DETALHADO & ESTAGIÁRIO -->
+    <div id="tab-content-resumo" class="hidden space-y-6">
+      
+      <!-- Salary & Commitment Section -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left: Salary Calculator -->
+        <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-wallet text-emerald-600"></i> Orçamento do Estagiário
+              </h3>
+              <span class="text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">Pague-se Primeiro</span>
+            </div>
+
+            <p class="text-xs text-slate-500 mb-4">
+              Informe sua bolsa estagiário para ver o comprometimento real da sua fatura e calcular sua meta de reserva.
+            </p>
+
+            <div class="mb-5">
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Minha Bolsa-Auxílio / Salário (R$)</label>
+              <div class="relative">
+                <span class="absolute left-3.5 top-2.5 text-sm font-bold text-slate-400">R$</span>
+                <input type="number" step="0.01" id="salary-input" oninput="updateSalary(this.value)" placeholder="1500,00" class="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-base">
+              </div>
+            </div>
+
+            <!-- Health Indicator Card -->
+            <div id="health-status-card" class="p-4 rounded-xl border bg-slate-50 border-slate-200">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-slate-700">Comprometimento do Salário</span>
+                <span id="salary-pct-badge" class="text-xs font-extrabold px-2 py-0.5 rounded">0%</span>
+              </div>
+              <div class="w-full bg-slate-200 rounded-full h-2.5 mb-2 overflow-hidden">
+                <div id="salary-progress-bar" class="bg-emerald-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+              <p id="salary-health-desc" class="text-xs text-slate-600 leading-relaxed">
+                Calculando status...
+              </p>
+            </div>
+          </div>
+
+          <!-- Savings Suggestion -->
+          <div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
+            <div>
+              <span class="text-slate-500 block">Meta Pague-se Primeiro (20%)</span>
+              <span id="savings-target-val" class="font-bold text-slate-900 text-sm">R$ 0,00</span>
+            </div>
+            <div class="text-right">
+              <span class="text-slate-500 block">Sua Parte da Fatura</span>
+              <span id="summary-my-part-val" class="font-bold text-emerald-600 text-sm">R$ 0,00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Mentors & Financial Mindset -->
+        <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+          <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-brain text-purple-600"></i> Mentoria Financeira para Estagiários
+          </h3>
+          <p class="text-xs text-slate-500">
+            Dicas práticas baseadas na filosofia de grandes autoridades financeiras para turbinar seu aprendizado desde o início da carreira.
+          </p>
+
+          <div class="space-y-3">
+            <!-- Arcuri Insight -->
+            <div class="p-3.5 rounded-xl bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-100 flex items-start gap-3">
+              <div class="w-9 h-9 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0 font-bold text-sm shadow-sm">
+                NA
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-rose-900">Nathalia Arcuri (Me Poupe!) — O "Efeito Chiclete" da Fatura</h4>
+                <p class="text-[11px] text-rose-800 leading-relaxed mt-0.5">
+                  "Se você empresta seu cartão para o amigo e ele atrasa o Pix, o juro rotativo estoura <strong>na sua conta</strong>. Trate terceiros na fatura como um passivo de altíssimo risco. Cobre o Pix no dia que a fatura fechar!"
+                </p>
+              </div>
+            </div>
+
+            <!-- Primo Rico Insight -->
+            <div class="p-3.5 rounded-xl bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-100 flex items-start gap-3">
+              <div class="w-9 h-9 rounded-full bg-violet-600 text-white flex items-center justify-center shrink-0 font-bold text-sm shadow-sm">
+                TN
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-violet-900">Thiago Nigro (O Primo Rico) — O Princípio da Alocação</h4>
+                <p class="text-[11px] text-violet-800 leading-relaxed mt-0.5">
+                  "Não gaste o que sobrou depois de poupar; poupe o que sobrou antes de gastar. Mesmo com bolsa de estagiário, garantir 15% a 20% para sua Reserva de Emergência no dia que cai o pagamento muda o seu futuro em 5 anos."
+                </p>
+              </div>
+            </div>
+
+            <!-- Cerbasi Insight -->
+            <div class="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 flex items-start gap-3">
+              <div class="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 font-bold text-sm shadow-sm">
+                GC
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-emerald-900">Gustavo Cerbasi — Inteligência Financeira</h4>
+                <p class="text-[11px] text-emerald-800 leading-relaxed mt-0.5">
+                  "O erro do jovem não é ter pequenos prazeres (Lazer), é não saber exatamente o peso que eles têm no acumulado do mês. Categorizar seus gastos permite cortar excessos sem perder qualidade de vida."
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Expenses Insights -->
+          <div class="pt-3 border-t border-slate-100">
+            <h4 class="text-xs font-bold text-slate-800 mb-2">Diagnóstico dos Seus Maiores Gastos:</h4>
+            <div id="top-categories-summary" class="flex flex-wrap gap-2 text-xs">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 mt-12 py-6 text-center text-xs text-slate-400">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <p>FaturaSmart © 2026 — Ferramenta de Separação de Fatura & Finanças para Estagiários</p>
+      <div class="flex items-center gap-4">
+        <button onclick="loadSampleData()" class="hover:text-emerald-600 transition">Carregar Exemplo</button>
+        <span>•</span>
+        <button onclick="exportCSV()" class="hover:text-emerald-600 transition">Exportar CSV</button>
+        <span>•</span>
+        <button onclick="confirmReset()" class="hover:text-rose-600 transition">Limpar Tudo</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Application Logic -->
+  <script>
+    // Global Application State
+    const STORAGE_KEY = 'faturasmart_data_v1';
+
+    let state = {
+      salary: 1500,
+      people: ['Eu', 'Mãe', 'Pai', 'Irmão', 'Amigo'],
+      expenses: [],
+      activeTab: 'lancamentos',
+      segmentView: 'EU', // 'EU' | 'TODOS'
+      editingId: null
+    };
+
+    // Category Styling Dictionary
+    const CATEGORIES_CONFIG = {
+      'Alimentação': { icon: 'fa-utensils', badge: 'bg-orange-100 text-orange-700 border-orange-200', color: '#f97316' },
+      'Saúde': { icon: 'fa-heart-pulse', badge: 'bg-rose-100 text-rose-700 border-rose-200', color: '#f43f5e' },
+      'Transporte': { icon: 'fa-car', badge: 'bg-blue-100 text-blue-700 border-blue-200', color: '#3b82f6' },
+      'Lazer': { icon: 'fa-gamepad', badge: 'bg-purple-100 text-purple-700 border-purple-200', color: '#a855f7' },
+      'Educação': { icon: 'fa-graduation-cap', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200', color: '#10b981' },
+      'Vestuário': { icon: 'fa-shirt', badge: 'bg-pink-100 text-pink-700 border-pink-200', color: '#ec4899' },
+      'Assinaturas': { icon: 'fa-tv', badge: 'bg-indigo-100 text-indigo-700 border-indigo-200', color: '#6366f1' },
+      'Casa/Outros': { icon: 'fa-house', badge: 'bg-slate-100 text-slate-700 border-slate-200', color: '#64748b' }
+    };
+
+    let categoryChartInstance = null;
+
+    // Toast Notification Utility
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      const bgColors = {
+        success: 'bg-slate-900 text-white border-emerald-500',
+        amber: 'bg-slate-900 text-white border-amber-500',
+        error: 'bg-rose-900 text-white border-rose-500'
+      };
+
+      const iconMap = {
+        success: '<i class="fa-solid fa-circle-check text-emerald-400"></i>',
+        amber: '<i class="fa-solid fa-triangle-exclamation text-amber-400"></i>',
+        error: '<i class="fa-solid fa-circle-xmark text-rose-400"></i>'
+      };
+
+      toast.className = `flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border-l-4 text-xs font-medium transform transition-all duration-300 pointer-events-auto ${bgColors[type] || bgColors.success}`;
+      toast.innerHTML = `${iconMap[type] || iconMap.success} <span>${message}</span>`;
+      
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-x-4');
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    // Currency Formatter
+    function formatBRL(val) {
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+    }
+
+    // Initialize Application
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      populatePersonSelects();
+      renderAll();
+    });
+
+    // Save & Load State
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function loadState() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          state = JSON.parse(saved);
+        } catch (e) {
+          console.error("Error loading state", e);
+        }
+      } else {
+        // Load initial default sample items if first time
+        loadInitialDefaultData();
+      }
+      
+      const salaryInput = document.getElementById('salary-input');
+      if (salaryInput) salaryInput.value = state.salary || 1500;
+    }
+
+    function loadInitialDefaultData() {
+      state.salary = 1500;
+      state.people = ['Eu', 'Mãe', 'Pai', 'Irmão', 'Amigo'];
+      state.expenses = [
+        { id: '1', title: 'Supermercado Carrefour', amount: 320.50, installment: 'À vista', category: 'Alimentação', person: 'Eu', paid: true, date: '2026-11-05' },
+        { id: '2', title: 'Farmácia Pague Menos', amount: 85.90, installment: 'À vista', category: 'Saúde', person: 'Mãe', paid: true, date: '2026-11-08' },
+        { id: '3', title: 'Tênis de Corrida Nike', amount: 249.90, installment: '1/3', category: 'Vestuário', person: 'Eu', paid: false, date: '2026-11-10' },
+        { id: '4', title: 'Restaurante OutBack (Jantar)', amount: 145.00, installment: 'À vista', category: 'Alimentação', person: 'Amigo', paid: false, date: '2026-11-12' },
+        { id: '5', title: 'Uber - Corrida Estágio', amount: 48.30, installment: 'À vista', category: 'Transporte', person: 'Eu', paid: true, date: '2026-11-14' },
+        { id: '6', title: 'Assinatura Netflix 4K', amount: 55.90, installment: 'Recorrente', category: 'Assinaturas', person: 'Irmão', paid: false, date: '2026-11-15' },
+        { id: '7', title: 'Curso Udemy Python & Data', amount: 39.90, installment: 'À vista', category: 'Educação', person: 'Eu', paid: true, date: '2026-11-18' }
+      ];
+      saveState();
+    }
+
+    function loadSampleData() {
+      loadInitialDefaultData();
+      populatePersonSelects();
+      renderAll();
+      showToast('Dados de exemplo carregados!');
+    }
+
+    function confirmReset() {
+      if (confirm('Deseja realmente apagar todos os lançamentos e cadastros?')) {
+        state.expenses = [];
+        state.people = ['Eu', 'Mãe'];
+        saveState();
+        populatePersonSelects();
+        renderAll();
+        showToast('Todos os dados foram resetados.', 'amber');
+      }
+    }
+
+    // Populate Select Inputs
+    function populatePersonSelects() {
+      const formSelect = document.getElementById('form-person');
+      const filterSelect = document.getElementById('filter-person');
+
+      if (!formSelect || !filterSelect) return;
+
+      const currentFormVal = formSelect.value;
+      const currentFilterVal = filterSelect.value;
+
+      formSelect.innerHTML = state.people.map(p => `
+        <option value="${p}" ${p === 'Eu' ? 'class="font-bold text-emerald-600"' : ''}>
+          ${p === 'Eu' ? '👤 Eu (Meu Gasto)' : '👥 ' + p}
+        </option>
+      `).join('');
+
+      filterSelect.innerHTML = '<option value="TODOS">👥 Todos Responsáveis</option>' + 
+        state.people.map(p => `<option value="${p}">${p === 'Eu' ? '👤 Eu' : '👥 ' + p}</option>`).join('');
+
+      if (currentFormVal && state.people.includes(currentFormVal)) formSelect.value = currentFormVal;
+      if (currentFilterVal) filterSelect.value = currentFilterVal;
+    }
+
+    // Person Modal Logic
+    function openPersonModal() {
+      document.getElementById('person-modal').classList.remove('hidden');
+      document.getElementById('modal-person-name').focus();
+    }
+
+    function closePersonModal() {
+      document.getElementById('person-modal').classList.add('hidden');
+      document.getElementById('modal-person-name').value = '';
+    }
+
+    function saveNewPerson() {
+      const input = document.getElementById('modal-person-name');
+      const name = input.value.trim();
+      
+      if (!name) {
+        showToast('Digite um nome válido.', 'error');
+        return;
+      }
+
+      if (state.people.map(p => p.toLowerCase()).includes(name.toLowerCase())) {
+        showToast('Esta pessoa já está cadastrada.', 'amber');
+        return;
+      }
+
+      state.people.push(name);
+      saveState();
+      populatePersonSelects();
+      
+      // Select newly added person
+      document.getElementById('form-person').value = name;
+      closePersonModal();
+      showToast(`Pessoa "${name}" cadastrada!`);
+      renderAll();
+    }
+
+    // Navigation Tabs Switcher
+    function switchTab(tabId) {
+      state.activeTab = tabId;
+      
+      const tabs = ['lancamentos', 'pessoas', 'segmentos', 'resumo'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`tab-btn-${t}`);
+        const content = document.getElementById(`tab-content-${t}`);
+        
+        if (t === tabId) {
+          btn.className = 'tab-btn flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap bg-white text-emerald-700 shadow-sm border border-slate-200/80';
+          content.classList.remove('hidden');
+        } else {
+          btn.className = 'tab-btn flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap text-slate-600 hover:bg-white/60';
+          content.classList.add('hidden');
+        }
+      });
+
+      if (tabId === 'segmentos') renderSegmentChart();
+      if (tabId === 'resumo') renderResumoTab();
+      if (tabId === 'pessoas') renderPersonCards();
+    }
+
+    // Form Handling (Add / Edit)
+    function handleFormSubmit(e) {
+      e.preventDefault();
+
+      const editId = document.getElementById('edit-id').value;
+      const title = document.getElementById('form-title').value.trim();
+      const amount = parseFloat(document.getElementById('form-amount').value);
+      const installment = document.getElementById('form-installment').value.trim() || 'À vista';
+      const category = document.getElementById('form-category').value;
+      const person = document.getElementById('form-person').value;
+
+      if (!title || isNaN(amount) || amount <= 0) {
+        showToast('Preencha os campos com valores válidos.', 'error');
+        return;
+      }
+
+      if (editId) {
+        // Edit Existing
+        const idx = state.expenses.findIndex(x => x.id === editId);
+        if (idx !== -1) {
+          state.expenses[idx] = {
+            ...state.expenses[idx],
+            title,
+            amount,
+            installment,
+            category,
+            person
+          };
+          showToast('Lançamento atualizado!');
+        }
+      } else {
+        // Add New
+        const newExpense = {
+          id: Date.now().toString(),
+          title,
+          amount,
+          installment,
+          category,
+          person,
+          paid: person === 'Eu' ? true : false,
+          date: new Date().toISOString().split('T')[0]
+        };
+        state.expenses.unshift(newExpense);
+        showToast('Novo lançamento adicionado!');
+      }
+
+      saveState();
+      resetForm();
+      renderAll();
+    }
+
+    function editExpense(id) {
+      const item = state.expenses.find(x => x.id === id);
+      if (!item) return;
+
+      document.getElementById('edit-id').value = item.id;
+      document.getElementById('form-title').value = item.title;
+      document.getElementById('form-amount').value = item.amount;
+      document.getElementById('form-installment').value = item.installment;
+      document.getElementById('form-category').value = item.category;
+      document.getElementById('form-person').value = item.person;
+
+      document.getElementById('submit-btn').innerHTML = '<i class="fa-solid fa-check"></i> <span>Salvar Alterações</span>';
+      document.getElementById('cancel-edit-btn').classList.remove('hidden');
+
+      // Scroll smoothly to form
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function cancelEdit() {
+      resetForm();
+    }
+
+    function resetForm() {
+      document.getElementById('expense-form').reset();
+      document.getElementById('edit-id').value = '';
+      document.getElementById('form-installment').value = 'À vista';
+      document.getElementById('form-person').value = 'Eu';
+      document.getElementById('submit-btn').innerHTML = '<i class="fa-solid fa-plus"></i> <span>Adicionar à Fatura</span>';
+      document.getElementById('cancel-edit-btn').classList.add('hidden');
+    }
+
+    function deleteExpense(id) {
+      if (confirm('Remover este lançamento da fatura?')) {
+        state.expenses = state.expenses.filter(x => x.id !== id);
+        saveState();
+        renderAll();
+        showToast('Lançamento removido.');
+      }
+    }
+
+    function togglePaidStatus(id) {
+      const idx = state.expenses.findIndex(x => x.id === id);
+      if (idx !== -1) {
+        state.expenses[idx].paid = !state.expenses[idx].paid;
+        saveState();
+        renderAll();
+        const statusText = state.expenses[idx].paid ? 'marcado como PIX Recebido!' : 'marcado como Pendente';
+        showToast(`Item ${statusText}`);
+      }
+    }
+
+    // Salary & Settings Update
+    function updateSalary(val) {
+      const parsed = parseFloat(val);
+      state.salary = isNaN(parsed) ? 0 : parsed;
+      saveState();
+      renderKPIs();
+      renderResumoTab();
+    }
+
+    // KPI Calculations & Header Stats
+    function renderKPIs() {
+      const totalFatura = state.expenses.reduce((acc, curr) => acc + curr.amount, 0);
+      const minhaParte = state.expenses.filter(x => x.person === 'Eu').reduce((acc, curr) => acc + curr.amount, 0);
+      const terceirosTotal = totalFatura - minhaParte;
+      
+      const faltaReceber = state.expenses.filter(x => x.person !== 'Eu' && !x.paid).reduce((acc, curr) => acc + curr.amount, 0);
+
+      const minhaPct = totalFatura > 0 ? ((minhaParte / totalFatura) * 100).toFixed(0) : 0;
+      const terceirosPct = totalFatura > 0 ? ((terceirosTotal / totalFatura) * 100).toFixed(0) : 0;
+
+      document.getElementById('kpi-total-fatura').innerText = formatBRL(totalFatura);
+      document.getElementById('kpi-minha-parte').innerText = formatBRL(minhaParte);
+      document.getElementById('kpi-minha-pct').innerText = `${minhaPct}% do valor total da fatura`;
+      
+      document.getElementById('kpi-total-terceiros').innerText = formatBRL(terceirosTotal);
+      document.getElementById('kpi-terceiros-pct').innerText = `${terceirosPct}% emprestado p/ terceiros`;
+
+      document.getElementById('kpi-falta-receber').innerText = formatBRL(faltaReceber);
+      
+      const badgePendente = document.getElementById('kpi-pendente-badge');
+      if (faltaReceber > 0) {
+        badgePendente.className = 'w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 text-xs animate-pulse';
+        document.getElementById('kpi-reembolsado-sub').innerText = 'Aguardando devolução PIX';
+      } else {
+        badgePendente.className = 'w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 text-xs';
+        document.getElementById('kpi-reembolsado-sub').innerText = 'Todos os PIX quitados!';
+      }
+
+      // Update badge on third party tab
+      const thirdPartyCount = state.people.filter(p => p !== 'Eu').length;
+      const badgeElem = document.getElementById('badge-terceiros');
+      if (thirdPartyCount > 0) {
+        badgeElem.classList.remove('hidden');
+        badgeElem.innerText = thirdPartyCount;
+      } else {
+        badgeElem.classList.add('hidden');
+      }
+    }
+
+    // Render Tab 1: Expense List & Table
+    function renderExpenses() {
+      const searchQuery = (document.getElementById('filter-search')?.value || '').toLowerCase();
+      const personFilter = document.getElementById('filter-person')?.value || 'TODOS';
+      const categoryFilter = document.getElementById('filter-category')?.value || 'TODOS';
+
+      const filtered = state.expenses.filter(item => {
+        const matchesSearch = item.title.toLowerCase().includes(searchQuery) || item.installment.toLowerCase().includes(searchQuery);
+        const matchesPerson = personFilter === 'TODOS' || item.person === personFilter;
+        const matchesCategory = categoryFilter === 'TODOS' || item.category === categoryFilter;
+        return matchesSearch && matchesPerson && matchesCategory;
+      });
+
+      const tbody = document.getElementById('expense-table-body');
+      const emptyState = document.getElementById('empty-state');
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      tbody.innerHTML = filtered.map(item => {
+        const catConfig = CATEGORIES_CONFIG[item.category] || CATEGORIES_CONFIG['Casa/Outros'];
+        const isMe = item.person === 'Eu';
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition">
+            <!-- Title -->
+            <td class="py-3 px-3 font-semibold text-slate-900">
+              <div class="flex items-center gap-2">
+                <span>${item.title}</span>
+              </div>
+            </td>
+
+            <!-- Segment Badge -->
+            <td class="py-3 px-3">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${catConfig.badge}">
+                <i class="fa-solid ${catConfig.icon}"></i> ${item.category}
+              </span>
+            </td>
+
+            <!-- Person -->
+            <td class="py-3 px-3">
+              <span class="inline-flex items-center gap-1 font-semibold text-xs ${isMe ? 'text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200' : 'text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md'}">
+                <i class="fa-solid ${isMe ? 'fa-user' : 'fa-user-tag'} text-[10px]"></i> ${item.person}
+              </span>
+            </td>
+
+            <!-- Installment -->
+            <td class="py-3 px-3 text-slate-500 font-medium">${item.installment}</td>
+
+            <!-- Amount -->
+            <td class="py-3 px-3 text-right font-bold text-slate-900">${formatBRL(item.amount)}</td>
+
+            <!-- Status PIX -->
+            <td class="py-3 px-3 text-center">
+              ${isMe ? `
+                <span class="text-[11px] text-slate-400 font-medium">Meu Gasto</span>
+              ` : `
+                <button onclick="togglePaidStatus('${item.id}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${item.paid ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-amber-100 text-amber-800 hover:bg-amber-200 animate-pulse'}">
+                  <i class="fa-solid ${item.paid ? 'fa-circle-check' : 'fa-clock'}"></i>
+                  ${item.paid ? 'Pix Recebido' : 'Aguardando Pix'}
+                </button>
+              `}
+            </td>
+
+            <!-- Actions -->
+            <td class="py-3 px-3 text-right space-x-1">
+              <button onclick="editExpense('${item.id}')" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-slate-100 rounded-lg transition" title="Editar">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button onclick="deleteExpense('${item.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" title="Excluir">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Render Tab 2: Breakdown Por Pessoa & WhatsApp Copying
+    function renderPersonCards() {
+      const container = document.getElementById('person-cards-grid');
+      if (!container) return;
+
+      container.innerHTML = state.people.map(person => {
+        const isMe = person === 'Eu';
+        const personExpenses = state.expenses.filter(x => x.person === person);
+        const total = personExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+        const paidAmount = personExpenses.filter(x => x.paid).reduce((acc, curr) => acc + curr.amount, 0);
+        const pendingAmount = total - paidAmount;
+
+        return `
+          <div class="bg-white rounded-2xl border ${isMe ? 'border-emerald-200 shadow-emerald-500/5' : 'border-slate-200/80'} shadow-sm p-5 flex flex-col justify-between">
+            <div>
+              <!-- Card Header -->
+              <div class="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-9 h-9 rounded-xl ${isMe ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'} flex items-center justify-center font-bold text-sm">
+                    <i class="fa-solid ${isMe ? 'fa-user' : 'fa-user-group'}"></i>
+                  </div>
+                  <div>
+                    <h3 class="font-bold text-slate-900 text-sm leading-tight">${isMe ? 'Eu (Gastos Próprios)' : person}</h3>
+                    <p class="text-[11px] text-slate-400">${personExpenses.length} ${personExpenses.length === 1 ? 'item lançado' : 'itens lançados'}</p>
+                  </div>
+                </div>
+
+                ${!isMe ? `
+                  <button onclick="copyWhatsAppSummary('${person}')" class="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold flex items-center gap-1.5 border border-emerald-200 transition" title="Copiar Cobrança WhatsApp">
+                    <i class="fa-brands fa-whatsapp text-emerald-600 font-bold"></i> Resumo
+                  </button>
+                ` : ''}
+              </div>
+
+              <!-- Amounts Summary -->
+              <div class="grid grid-cols-2 gap-2 mb-4 bg-slate-50 p-3 rounded-xl">
+                <div>
+                  <span class="text-[10px] uppercase font-semibold text-slate-400 block">Total da Fatura</span>
+                  <span class="font-bold text-slate-900 text-sm">${formatBRL(total)}</span>
+                </div>
+                ${!isMe ? `
+                  <div>
+                    <span class="text-[10px] uppercase font-semibold text-slate-400 block">Saldo Pendente</span>
+                    <span class="font-bold text-sm ${pendingAmount > 0 ? 'text-amber-600' : 'text-emerald-600'}">
+                      ${formatBRL(pendingAmount)}
+                    </span>
+                  </div>
+                ` : `
+                  <div>
+                    <span class="text-[10px] uppercase font-semibold text-slate-400 block">Status</span>
+                    <span class="font-bold text-emerald-600 text-xs flex items-center gap-1 mt-0.5"><i class="fa-solid fa-circle-check"></i> Parte Pessoal</span>
+                  </div>
+                `}
+              </div>
+
+              <!-- Expense Items List -->
+              <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                ${personExpenses.length === 0 ? `
+                  <p class="text-xs text-slate-400 italic text-center py-4">Nenhum lançamento para esta pessoa.</p>
+                ` : personExpenses.map(item => `
+                  <div class="flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50/50 hover:bg-slate-100/60 transition">
+                    <div class="flex flex-col">
+                      <span class="font-semibold text-slate-800">${item.title}</span>
+                      <span class="text-[10px] text-slate-400">${item.category} • ${item.installment}</span>
+                    </div>
+                    <div class="text-right">
+                      <span class="font-bold text-slate-900 block">${formatBRL(item.amount)}</span>
+                      ${!isMe ? `
+                        <button onclick="togglePaidStatus('${item.id}')" class="text-[10px] font-bold ${item.paid ? 'text-emerald-600' : 'text-amber-600 hover:underline'}">
+                          ${item.paid ? '✓ Reembolsado' : '⏳ Marcar Pago'}
+                        </button>
+                      ` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- Footer indicator -->
+            ${!isMe && pendingAmount > 0 ? `
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-amber-700 bg-amber-50/60 p-2 rounded-lg">
+                <span class="flex items-center gap-1 font-medium"><i class="fa-solid fa-clock"></i> Reembolso pendente</span>
+                <span class="font-bold">${formatBRL(pendingAmount)}</span>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Copy formatted text for WhatsApp
+    function copyWhatsAppSummary(personName) {
+      const personExpenses = state.expenses.filter(x => x.person === personName);
+      if (personExpenses.length === 0) {
+        showToast(`Nenhum lançamento encontrado para ${personName}.`, 'amber');
+        return;
+      }
+
+      const total = personExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+      const paid = personExpenses.filter(x => x.paid).reduce((acc, curr) => acc + curr.amount, 0);
+      const pending = total - paid;
+
+      let msg = `💳 *FaturaSmart — Resumo para ${personName}*\n`;
+      msg += `------------------------------------\n`;
+      msg += `📌 *Itens lançados na fatura:*\n`;
+
+      personExpenses.forEach(item => {
+        const statusStr = item.paid ? `[✅ Pix Ok]` : `[⏳ Pendente]`;
+        msg += `• ${item.title} (${item.installment}): *${formatBRL(item.amount)}* ${statusStr}\n`;
+      });
+
+      msg += `------------------------------------\n`;
+      msg += `💰 *Total da sua parte:* ${formatBRL(total)}\n`;
+      msg += `✅ *Já Reembolsado:* ${formatBRL(paid)}\n`;
+      msg += `⚠️ *VALOR PENDENTE:* *${formatBRL(pending)}*\n\n`;
+      msg += `_Favor realizar o Pix até o fechamento da fatura! Obrigado!_ 🚀`;
+
+      // Copy Clipboard strategy with fallback
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(msg).then(() => {
+          showToast(`Resumo de ${personName} copiado! Cole no WhatsApp.`);
+        }).catch(() => fallbackCopy(msg, personName));
+      } else {
+        fallbackCopy(msg, personName);
+      }
+    }
+
+    function fallbackCopy(text, personName) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        showToast(`Resumo de ${personName} copiado! Cole no WhatsApp.`);
+      } catch (err) {
+        showToast('Não foi possível copiar automaticamente.', 'error');
+      }
+      document.body.removeChild(textarea);
+    }
+
+    // Render Tab 3: Segment Breakdown & Chart.js
+    function toggleSegmentView(mode) {
+      state.segmentView = mode;
+      
+      const btnEu = document.getElementById('segment-btn-eu');
+      const btnTodos = document.getElementById('segment-btn-todos');
+
+      if (mode === 'EU') {
+        btnEu.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition bg-white text-emerald-700 shadow-sm';
+        btnTodos.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900';
+      } else {
+        btnTodos.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition bg-white text-emerald-700 shadow-sm';
+        btnEu.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900';
+      }
+
+      renderSegmentChart();
+    }
+
+    function renderSegmentChart() {
+      const filteredExpenses = state.segmentView === 'EU' 
+        ? state.expenses.filter(x => x.person === 'Eu')
+        : state.expenses;
+
+      const totalAmount = filteredExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+
+      // Group totals by category
+      const categoriesMap = {};
+      Object.keys(CATEGORIES_CONFIG).forEach(cat => categoriesMap[cat] = 0);
+
+      filteredExpenses.forEach(item => {
+        if (categoriesMap[item.category] !== undefined) {
+          categoriesMap[item.category] += item.amount;
+        } else {
+          categoriesMap['Casa/Outros'] += item.amount;
+        }
+      });
+
+      // Filter non-zero categories
+      const activeCategories = Object.keys(categoriesMap).filter(cat => categoriesMap[cat] > 0);
+      const categoryTotals = activeCategories.map(cat => categoriesMap[cat]);
+      const categoryColors = activeCategories.map(cat => CATEGORIES_CONFIG[cat].color);
+
+      // Render Progress Bars List
+      const barsContainer = document.getElementById('segment-bars-list');
+      if (barsContainer) {
+        if (activeCategories.length === 0) {
+          barsContainer.innerHTML = '<p class="text-xs text-slate-400 italic">Nenhum gasto registrado nesta visão.</p>';
+        } else {
+          barsContainer.innerHTML = activeCategories.map(cat => {
+            const amount = categoriesMap[cat];
+            const pct = totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : 0;
+            const config = CATEGORIES_CONFIG[cat];
+
+            return `
+              <div>
+                <div class="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
+                  <span class="flex items-center gap-1.5">
+                    <i class="fa-solid ${config.icon}" style="color: ${config.color}"></i> ${cat}
+                  </span>
+                  <span class="text-slate-900 font-bold">${formatBRL(amount)} <span class="text-slate-400 text-[11px] font-normal">(${pct}%)</span></span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                  <div class="h-2 rounded-full transition-all duration-500" style="width: ${pct}%; background-color: ${config.color}"></div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      }
+
+      // Render Chart.js
+      const canvas = document.getElementById('categoryChart');
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+
+      if (categoryChartInstance) {
+        categoryChartInstance.destroy();
+      }
+
+      if (activeCategories.length === 0) {
+        return;
+      }
+
+      categoryChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: activeCategories,
+          datasets: [{
+            data: categoryTotals,
+            backgroundColor: categoryColors,
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return ` ${context.label}: ${formatBRL(context.raw)}`;
+                }
+              }
+            }
+          },
+          cutout: '70%'
+        }
+      });
+    }
+
+    // Render Tab 4: Resumo & Mentoria Estagiário
+    function renderResumoTab() {
+      const minhaParte = state.expenses.filter(x => x.person === 'Eu').reduce((acc, curr) => acc + curr.amount, 0);
+      const salary = state.salary || 1500;
+      
+      const pctCommitment = salary > 0 ? (minhaParte / salary) * 100 : 0;
+      const savingsTarget = salary * 0.20; // 20% rule
+
+      document.getElementById('summary-my-part-val').innerText = formatBRL(minhaParte);
+      document.getElementById('savings-target-val').innerText = formatBRL(savingsTarget);
+
+      const badge = document.getElementById('salary-pct-badge');
+      const bar = document.getElementById('salary-progress-bar');
+      const card = document.getElementById('health-status-card');
+      const desc = document.getElementById('salary-health-desc');
+
+      const formattedPct = pctCommitment.toFixed(1);
+
+      badge.innerText = `${formattedPct}%`;
+
+      let progressWidth = Math.min(pctCommitment, 100);
+      bar.style.width = `${progressWidth}%`;
+
+      if (pctCommitment <= 30) {
+        badge.className = 'text-xs font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800';
+        bar.className = 'bg-emerald-500 h-2.5 rounded-full transition-all duration-500';
+        card.className = 'p-4 rounded-xl border bg-emerald-50/50 border-emerald-200';
+        desc.innerHTML = `<strong>Saúde Financeira Excelente!</strong> Sua fatura pessoal compromete apenas ${formattedPct}% do seu salário de estagiário. Você tem margem total para cumprir a meta do <strong>Pague-se Primeiro</strong> e investir o restante!`;
+      } else if (pctCommitment <= 50) {
+        badge.className = 'text-xs font-extrabold px-2 py-0.5 rounded bg-blue-100 text-blue-800';
+        bar.className = 'bg-blue-500 h-2.5 rounded-full transition-all duration-500';
+        card.className = 'p-4 rounded-xl border bg-blue-50/50 border-blue-200';
+        desc.innerHTML = `<strong>Faixa Neutra / Moderada.</strong> Sua fatura compromete ${formattedPct}% do bolsa-auxílio. Fique atento a novas compras parceladas para manter seu limite sob controle.`;
+      } else if (pctCommitment <= 70) {
+        badge.className = 'text-xs font-extrabold px-2 py-0.5 rounded bg-amber-100 text-amber-800';
+        bar.className = 'bg-amber-500 h-2.5 rounded-full transition-all duration-500';
+        card.className = 'p-4 rounded-xl border bg-amber-50/50 border-amber-200';
+        desc.innerHTML = `<strong>Atenção (Alerta Nathalia Arcuri)!</strong> Sua fatura consome ${formattedPct}% do seu rendimento de estágio. Evite parcelamentos no próximo mês para não comprometer sua reserva de emergência.`;
+      } else {
+        badge.className = 'text-xs font-extrabold px-2 py-0.5 rounded bg-rose-100 text-rose-800';
+        bar.className = 'bg-rose-500 h-2.5 rounded-full transition-all duration-500';
+        card.className = 'p-4 rounded-xl border bg-rose-50/50 border-rose-200';
+        desc.innerHTML = `<strong>Alerta Crítico de Risco!</strong> Sua fatura pessoal engoliu ${formattedPct}% do seu salário de estagiário. Riscos elevados de entrar no rotativo. Evite qualquer novo gasto com o cartão até o mês seguinte!`;
+      }
+
+      // Render Top 3 Spending Categories (Personal)
+      const personalExpenses = state.expenses.filter(x => x.person === 'Eu');
+      const catTotals = {};
+      personalExpenses.forEach(x => {
+        catTotals[x.category] = (catTotals[x.category] || 0) + x.amount;
+      });
+
+      const sortedCats = Object.keys(catTotals).sort((a,b) => catTotals[b] - catTotals[a]).slice(0, 3);
+      const topSummaryElem = document.getElementById('top-categories-summary');
+
+      if (sortedCats.length === 0) {
+        topSummaryElem.innerHTML = '<span class="text-slate-400 italic">Sem gastos pessoais lançados ainda.</span>';
+      } else {
+        topSummaryElem.innerHTML = sortedCats.map(cat => {
+          const cfg = CATEGORIES_CONFIG[cat] || CATEGORIES_CONFIG['Casa/Outros'];
+          return `
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-semibold ${cfg.badge}">
+              <i class="fa-solid ${cfg.icon}"></i> ${cat}: <strong>${formatBRL(catTotals[cat])}</strong>
+            </span>
+          `;
+        }).join('');
+      }
+    }
+
+    // Export Data (JSON & CSV)
+    function exportJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `FaturaSmart_Backup_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast('Backup JSON gerado com sucesso!');
+    }
+
+    function exportCSV() {
+      if (state.expenses.length === 0) {
+        showToast('Nenhum dado para exportar.', 'amber');
+        return;
+      }
+
+      let csv = "Estabelecimento;Valor;Parcela;Categoria;Responsavel;StatusPix;Data\n";
+      state.expenses.forEach(e => {
+        csv += `"${e.title}";"${e.amount.toFixed(2)}";"${e.installment}";"${e.category}";"${e.person}";"${e.paid ? 'Recebido' : 'Pendente'}";"${e.date}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `FaturaSmart_Relatorio_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('Relatório CSV gerado!');
+    }
+
+    // Global Render Trigger
+    function renderAll() {
+      renderKPIs();
+      renderExpenses();
+      if (state.activeTab === 'pessoas') renderPersonCards();
+      if (state.activeTab === 'segmentos') renderSegmentChart();
+      if (state.activeTab === 'resumo') renderResumoTab();
+    }
+  </script>
+</body>
+</html>
